@@ -1,0 +1,7 @@
+version: "3"
+
+tasks:
+  validate:
+    desc: Run organization repository policy locally
+    cmds:
+      - python3 scripts/validate-repository.py --root . --enforce-numbered-docs

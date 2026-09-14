@@ -1,0 +1,82 @@
+name: Repository Standards
+
+on:
+  workflow_call:
+    inputs:
+      standards_ref:
+        description: Ref of homel-dev/.github used for policy files
+        required: false
+        default: main
+        type: string
+      enforce_numbered_docs:
+        description: Require docs/*.md to follow NN_topic_slug.md
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  standards:
+    name: Organization standards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout consumer repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Checkout organization standards
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: homel-dev/.github
+          ref: ${{ inputs.standards_ref }}
+          path: .org-standards
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.13"
+
+      - name: Install lint dependencies
+        run: |
+          python -m pip install --disable-pip-version-check "yamllint==1.38.0"
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends shellcheck
+
+      - name: Organization repository policy
+        env:
+          ENFORCE_NUMBERED_DOCS: ${{ inputs.enforce_numbered_docs }}
+        run: |
+          args=()
+          if [[ "${ENFORCE_NUMBERED_DOCS}" == "true" ]]; then
+            args+=(--enforce-numbered-docs)
+          fi
+          python .org-standards/scripts/validate-repository.py --root . "${args[@]}"
+
+      - name: YAML lint
+        run: yamllint -c .org-standards/config/yamllint.yml .
+
+      - name: Bash syntax
+        shell: bash
+        run: |
+          mapfile -d '' files < <(
+            find . -type f -name '*.sh'               -not -path './.git/*'               -not -path './.org-standards/*'               -not -path './old/*'               -print0
+          )
+          for file in "${files[@]}"; do
+            bash -n "${file}"
+          done
+
+      - name: ShellCheck errors
+        shell: bash
+        run: |
+          mapfile -d '' files < <(
+            find . -type f -name '*.sh'               -not -path './.git/*'               -not -path './.org-standards/*'               -not -path './old/*'               -print0
+          )
+          if ((${#files[@]})); then
+            shellcheck --severity=error "${files[@]}"
+          fi
