@@ -1,0 +1,192 @@
+name: Repository Context Artifact
+
+on:
+  workflow_call:
+    inputs:
+      codegraph_version:
+        description: CodeGraph release version without the leading v
+        required: false
+        default: "0.20.1"
+        type: string
+      codegraph_sha256_linux_x64:
+        description: SHA256 of the pinned CodeGraph Linux x64 release binary
+        required: false
+        default: "32b26422fa5ffe0a130955b7f7df771f722b2d427d67f53f104d9907bdfb24a6"
+        type: string
+      codegraph_max_files:
+        description: Maximum files CodeGraph may index
+        required: false
+        default: 50000
+        type: number
+      retention_days:
+        description: GitHub Actions artifact retention in days
+        required: false
+        default: 3
+        type: number
+      include_codegraph_binary:
+        description: Include the pinned CodeGraph binary in the artifact
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  repository-context:
+    name: Repository context
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository with complete Git history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Materialize canonical workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          context_root=/tmp/homel-repository-context
+          rm -rf "${context_root}"
+          mkdir -p "${context_root}/workspace" "${context_root}/home" "${context_root}/out"
+          cp -a "${GITHUB_WORKSPACE}/." "${context_root}/workspace/"
+
+          actual_sha="$(git -C "${context_root}/workspace" rev-parse HEAD)"
+          test "${actual_sha}" = "${GITHUB_SHA}"
+          test -d "${context_root}/workspace/.git"
+
+          if grep -Eiq \
+            '(authorization:|x-access-token|github_pat_|ghp_)' \
+            "${context_root}/workspace/.git/config"; then
+            echo "credential material found in archived .git/config" >&2
+            exit 1
+          fi
+
+      - name: Install pinned CodeGraph
+        shell: bash
+        env:
+          CODEGRAPH_VERSION: ${{ inputs.codegraph_version }}
+          CODEGRAPH_SHA256: ${{ inputs.codegraph_sha256_linux_x64 }}
+        run: |
+          set -euo pipefail
+          context_root=/tmp/homel-repository-context
+          binary="${context_root}/codegraph-server"
+          curl -fsSL \
+            "https://github.com/codegraph-ai/CodeGraph/releases/download/v${CODEGRAPH_VERSION}/codegraph-server-linux-x64" \
+            -o "${binary}"
+          echo "${CODEGRAPH_SHA256}  ${binary}" | sha256sum --check -
+          chmod 0755 "${binary}"
+          "${binary}" --version
+
+      - name: Build persisted CodeGraph state
+        shell: bash
+        env:
+          CODEGRAPH_MAX_FILES: ${{ inputs.codegraph_max_files }}
+        run: |
+          set -euo pipefail
+          context_root=/tmp/homel-repository-context
+          export HOME="${context_root}/home"
+
+          "${context_root}/codegraph-server" \
+            --graph-only \
+            --workspace "${context_root}/workspace" \
+            --max-files "${CODEGRAPH_MAX_FILES}" \
+            --run-tool codegraph_find_entry_points \
+            --tool-args '{"limit":1}' \
+            > "${context_root}/out/CODEGRAPH_PROBE.json"
+
+          test -d "${HOME}/.codegraph"
+          test -n "$(find "${HOME}/.codegraph" -type f -name index_state.json -print -quit)"
+          test -n "$(find "${HOME}/.codegraph" -maxdepth 2 -type f -print -quit)"
+
+      - name: Package repository and CodeGraph state
+        shell: bash
+        env:
+          CODEGRAPH_VERSION: ${{ inputs.codegraph_version }}
+          CODEGRAPH_SHA256: ${{ inputs.codegraph_sha256_linux_x64 }}
+          CODEGRAPH_MAX_FILES: ${{ inputs.codegraph_max_files }}
+          INCLUDE_CODEGRAPH_BINARY: ${{ inputs.include_codegraph_binary }}
+        run: |
+          set -euo pipefail
+          context_root=/tmp/homel-repository-context
+          out="${context_root}/out"
+
+          tar -C "${context_root}" -czf "${out}/repo-snapshot.tar.gz" workspace
+          tar -C "${context_root}/home" -czf "${out}/codegraph-state.tar.gz" .codegraph
+
+          if [[ "${INCLUDE_CODEGRAPH_BINARY}" == "true" ]]; then
+            gzip -9 -c "${context_root}/codegraph-server" > "${out}/codegraph-server-linux-x64.gz"
+          fi
+
+          export CONTEXT_ROOT="${context_root}"
+          export CODEGRAPH_VERSION CODEGRAPH_SHA256 CODEGRAPH_MAX_FILES
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          out = Path(os.environ["CONTEXT_ROOT"]) / "out"
+
+          def sha256(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          files = {}
+          for path in sorted(out.iterdir()):
+              if path.name == "MANIFEST.json":
+                  continue
+              files[path.name] = {
+                  "sha256": sha256(path),
+                  "size_bytes": path.stat().st_size,
+              }
+
+          manifest = {
+              "schema_version": 1,
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "ref": os.environ["GITHUB_REF"],
+              "sha": os.environ["GITHUB_SHA"],
+              "created_at": datetime.now(timezone.utc).isoformat(),
+              "canonical_workspace": "/tmp/homel-repository-context/workspace",
+              "codegraph": {
+                  "version": os.environ["CODEGRAPH_VERSION"],
+                  "binary_sha256": os.environ["CODEGRAPH_SHA256"],
+                  "graph_only": True,
+                  "max_files": int(os.environ["CODEGRAPH_MAX_FILES"]),
+              },
+              "files": files,
+          }
+
+          (out / "MANIFEST.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Verify packaged snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          context_root=/tmp/homel-repository-context
+          verify_root="${RUNNER_TEMP}/repository-context-verify"
+          rm -rf "${verify_root}"
+          mkdir -p "${verify_root}"
+          tar -C "${verify_root}" -xzf "${context_root}/out/repo-snapshot.tar.gz"
+          test "$(git -C "${verify_root}/workspace" rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -d "${verify_root}/workspace/.git"
+
+      - name: Upload repository context
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: repository-context
+          path: /tmp/homel-repository-context/out/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: ${{ inputs.retention_days }}
