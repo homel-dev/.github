@@ -13,6 +13,11 @@ rules:
   line-length: disable
   truthy: disable
   comments-indentation: disable
+  indentation:
+    indent-sequences: true
+    ignore: |
+      /clusters/*/flux-system/gotk-components.yaml
+      /clusters/*/flux-system/kustomization.yaml
   comments:
     min-spaces-from-content: 1
   braces:
