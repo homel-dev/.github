@@ -1,4 +1,38 @@
-# Homel Engineering Style Guide
+# HOMEL ENGINEERING STYLE GUIDE
+## Organization-Wide Engineering Practices
+### Foundational Engineering Specification (Document 01 of 04)
+*Namespace: homel-dev • Owner: architecture-team*
+
+---
+
+## Navigation
+
+**Previous:** None | **Next:** [02_documentation_style_guide.md](02_documentation_style_guide.md)
+
+- [0. Status, Scope, and Authority](#0-status-scope-and-authority)
+- [1. Scope and authority](#1-scope-and-authority)
+- [2. General engineering rules](#2-general-engineering-rules)
+- [3. Determinism and reproducibility](#3-determinism-and-reproducibility)
+- [4. Configuration and Kubernetes](#4-configuration-and-kubernetes)
+- [5. Shell](#5-shell)
+- [6. Python](#6-python)
+- [7. Security and credentials](#7-security-and-credentials)
+- [8. Verification](#8-verification)
+- [9. Closing Statement](#9-closing-statement)
+
+---
+
+## 0. Status, Scope, and Authority
+
+**Status:** IMPLEMENTED
+**Audience:** Engineers, reviewers, and repository maintainers
+**Change policy:** Update with changes to organization engineering requirements and CI behavior.
+
+This standard is organization-wide. The checked-in policy and reusable CI workflow provide the reference; repository-specific implementation and validation remain authoritative for runtime behavior.
+
+[Back to top](#navigation)
+
+---
 
 ## 1. Scope and authority
 
@@ -13,6 +47,10 @@ Normative terms are used deliberately:
 
 A repository may define stricter local policy. A local rule that intentionally
 deviates from this guide MUST document the reason and scope of the deviation.
+
+[Back to top](#navigation)
+
+---
 
 ## 2. General engineering rules
 
@@ -29,6 +67,10 @@ documents it as authoritative.
 Placeholder configuration MUST NOT be presented as production-ready
 configuration.
 
+[Back to top](#navigation)
+
+---
+
 ## 3. Determinism and reproducibility
 
 Builds, tests, validation, deployment rendering, and release generation SHOULD
@@ -42,6 +84,10 @@ GitHub Actions from third-party repositories MUST be pinned to a full commit
 SHA. Organization-owned reusable workflows MAY temporarily track a protected
 organization branch during bootstrap, but stable consumers SHOULD pin the
 workflow to a reviewed commit SHA.
+
+[Back to top](#navigation)
+
+---
 
 ## 4. Configuration and Kubernetes
 
@@ -62,6 +108,10 @@ against the actual CNI and network topology.
 
 Secrets MUST NOT be committed. Examples must contain unmistakable placeholders.
 
+[Back to top](#navigation)
+
+---
+
 ## 5. Shell
 
 Executable shell scripts MUST:
@@ -77,6 +127,10 @@ Executable shell scripts MUST:
 Shell CI MUST run syntax validation. ShellCheck SHOULD run at least at error
 severity.
 
+[Back to top](#navigation)
+
+---
+
 ## 6. Python
 
 Python automation SHOULD use the standard library when practical and SHOULD
@@ -88,6 +142,10 @@ condition that failed.
 Scripts that inspect repository state MUST avoid following symlinks outside the
 repository root.
 
+[Back to top](#navigation)
+
+---
+
 ## 7. Security and credentials
 
 Repository automation MUST use minimum GitHub token permissions.
@@ -98,6 +156,10 @@ Private keys, access tokens, passwords, cloud credentials, and live service
 credentials MUST NOT be committed.
 
 CI MUST NOT echo secrets or derived credentials.
+
+[Back to top](#navigation)
+
+---
 
 ## 8. Verification
 
@@ -114,3 +176,19 @@ include:
 
 CI is a gate, not documentation of intent. Repository documentation must still
 describe the invariant being enforced.
+
+[Back to top](#navigation)
+
+---
+
+---
+
+## 9. Closing Statement
+
+This document governs the specified organization-wide conventions; project-specific contracts belong in their respective repositories.
+
+[Back to top](#navigation)
+
+---
+
+**END OF DOCUMENT 01**
