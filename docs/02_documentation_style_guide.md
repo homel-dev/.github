@@ -1,4 +1,3 @@
-~~~~markdown
 # HOMEL DOCUMENTATION STYLE GUIDE AND STANDARD
 ## Formatting, Authority, Navigation, and Maintenance Rules
 ### Foundational Engineering Specification (Document 02 of 04)
@@ -354,4 +353,3 @@ Organization documentation is trustworthy only when engineers can distinguish im
 ---
 
 **END OF DOCUMENT 02**
-~~~~
