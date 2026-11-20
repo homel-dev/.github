@@ -1,4 +1,4 @@
-# HOMEL DOCUMENTATION STYLE GUIDE AND STANDARD
+# HOMEL.DEV DOCUMENTATION STYLE GUIDE AND STANDARD
 ## Formatting, Authority, Navigation, and Maintenance Rules
 ### Foundational Engineering Specification (Document 02 of 04)
 *Namespace: homel-dev • Owner: architecture-team*
